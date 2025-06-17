@@ -1,0 +1,85 @@
+Dynamic Group Rules
+resource.id = 'ocid1.autonomousdatabase.oc1....'	
+ALL {resource.type = 'autonomousdatabase', resource.compartment.id = 'ocid1.compartment....'}	
+ALL {resource.compartment.id='ocid1.compartment....'}
+
+
+Polcies
+allow group <group> to manage data-catalog-family in compartment <compartment>	
+allow group <group> to read objects in compartment <compartment>
+allow dynamic-group <dynamic-group-name> to manage data-catalog-family in compartment <compartment>	
+allow dynamic-group <dynamic-group-name> to read objects in compartment <compartment>
+Allow dynamic-group <dynamic-group-name> to manage autonomous-databases in compartment <compartment>
+
+---Step 1    grant access to the resource principal credential to a database user 
+EXEC DBMS_CLOUD_ADMIN.ENABLE_RESOURCE_PRINCIPAL();
+--- Step 2  -- Use this step only if the sync will be done by another user.
+grant dcat_sync to admin;
+--- Step 3
+    BEGIN
+      DBMS_CLOUD.CREATE_CREDENTIAL (
+        credential_name => 'OCI_NATIVE_CRED',
+        user_ocid              => 'ocid1....',
+        tenancy_ocid           => 'ocid1.tenancy.....',
+        private_key            => 'Copy-paste the private key',
+        fingerprint            => '...-...-...-...');
+    END;
+
+---Step 4 Check if credential was created
+
+SELECT owner, credential_name
+FROM dba_credentials 
+WHERE credential_name LIKE '%NATIVE%';
+
+---Step 5 Checking in case Step 4 gave nothing
+select * from dba_credentials;
+
+--- Step 6
+select * from all_dcat_connections;
+define dcat_region='us-phoenix-1'
+define dcat_ocid = 'ocid1.datac'
+define dcat_credential ='OCI_NATIVE_CRED'
+define obj_credential = 'OCI_NATIVE_CRED'
+define uri_root = 'https://objectstoragn/namespace/b/bucket-name/o'
+
+--- Step7 Checking if object storage is accessible using credentials
+
+select * from dbms_cloud.list_objects('&dcat_credential', '&uri_root/');
+
+--- Step 8 Setting connection
+exec dbms_dcat.set_data_catalog_credential(credential_name => '&dcat_credential');
+
+begin
+dbms_dcat.set_data_catalog_conn (
+region => '&dcat_region',
+catalog_id => '&dcat_ocid');
+end;
+
+select * from all_dcat_assets;
+select * from ALL_DCAT_ENTITIES;
+
+--- Step 9 Sync
+EXEC DBMS_DCAT.RUN_SYNC(synced_objects=>'{"asset_list":["*"]}'
+
+
+--- Example of targeted sync
+/* begin
+dbms_dcat.run_sync(synced_objects =>
+ '{"asset_list": [
+ {
+ "asset_id":"9b12eb45-320d-4c5a-af17-2a50f7f73feb",
+ "folder_list":[
+ "fde6a2b9-eb35-473b-bf10-3a44aec19392"
+ ]
+ } 
+ ]}'); 
+end; */
+
+--- Checking ALL_DCAT_GLOBAL_ACCESSIBLE_CATALOGS view
+
+select * from ALL_DCAT_GLOBAL_ACCESSIBLE_CATALOGS;
+
+--- Let us create a table with Dcat data from ALL_DCAT_FOLDERS view.
+
+CREATE TABLE ALL_DCAT_FOLDERS as (select * from ALL_DCAT_FOLDERS);
+
